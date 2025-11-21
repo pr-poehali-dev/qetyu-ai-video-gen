@@ -3,57 +3,87 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Icon from '@/components/ui/icon';
+import { useToast } from '@/hooks/use-toast';
 
-interface Video {
+interface MediaItem {
   id: string;
   prompt: string;
-  thumbnail: string;
+  url: string;
+  type: 'video' | 'image';
   status: 'generating' | 'completed';
   timestamp: Date;
 }
 
 const Index = () => {
   const [prompt, setPrompt] = useState('');
+  const [mediaType, setMediaType] = useState<'video' | 'image'>('image');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [videos, setVideos] = useState<Video[]>([
-    {
-      id: '1',
-      prompt: 'Космический корабль летит сквозь звёздное небо',
-      thumbnail: 'https://cdn.poehali.dev/projects/ab08b2fd-f584-4277-98fa-ab3672f00a14/files/5a2e49d4-82cd-4293-982d-d7a5e11eefcc.jpg',
-      status: 'completed',
-      timestamp: new Date(Date.now() - 3600000)
-    },
-    {
-      id: '2',
-      prompt: 'Абстрактные формы трансформируются в 3D пространстве',
-      thumbnail: 'https://cdn.poehali.dev/projects/ab08b2fd-f584-4277-98fa-ab3672f00a14/files/5a2e49d4-82cd-4293-982d-d7a5e11eefcc.jpg',
-      status: 'completed',
-      timestamp: new Date(Date.now() - 7200000)
-    }
-  ]);
+  const [items, setItems] = useState<MediaItem[]>([]);
+  const { toast } = useToast();
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!prompt.trim()) return;
 
     setIsGenerating(true);
-    const newVideo: Video = {
+    const newItem: MediaItem = {
       id: Date.now().toString(),
       prompt: prompt,
-      thumbnail: 'https://cdn.poehali.dev/projects/ab08b2fd-f584-4277-98fa-ab3672f00a14/files/5a2e49d4-82cd-4293-982d-d7a5e11eefcc.jpg',
+      url: '',
+      type: mediaType,
       status: 'generating',
       timestamp: new Date()
     };
 
-    setVideos(prev => [newVideo, ...prev]);
+    setItems(prev => [newItem, ...prev]);
 
-    setTimeout(() => {
-      setVideos(prev => prev.map(v => 
-        v.id === newVideo.id ? { ...v, status: 'completed' as const } : v
-      ));
-      setIsGenerating(false);
+    try {
+      if (mediaType === 'image') {
+        const response = await fetch('https://functions.poehali.dev/d5e2bccf-00f0-4efd-951e-c012943549fd', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt })
+        });
+        
+        const data = await response.json();
+        
+        setItems(prev => prev.map(item => 
+          item.id === newItem.id 
+            ? { ...item, status: 'completed' as const, url: data.url } 
+            : item
+        ));
+        
+        toast({
+          title: "Фото готово! 📸",
+          description: "Ваше изображение успешно создано"
+        });
+      } else {
+        setTimeout(() => {
+          setItems(prev => prev.map(item => 
+            item.id === newItem.id 
+              ? { ...item, status: 'completed' as const, url: 'https://cdn.poehali.dev/projects/ab08b2fd-f584-4277-98fa-ab3672f00a14/files/5a2e49d4-82cd-4293-982d-d7a5e11eefcc.jpg' } 
+              : item
+          ));
+          
+          toast({
+            title: "Видео готово! 🎬",
+            description: "Ваше видео успешно создано"
+          });
+        }, 5000);
+      }
+      
       setPrompt('');
-    }, 5000);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Ошибка генерации",
+        description: "Попробуйте ещё раз"
+      });
+      setItems(prev => prev.filter(item => item.id !== newItem.id));
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -69,7 +99,7 @@ const Index = () => {
             </h1>
           </div>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Создавайте потрясающие AI видео из ваших идей за секунды
+            Создавайте потрясающие AI видео и фото из ваших идей за секунды
           </p>
         </header>
 
@@ -78,9 +108,27 @@ const Index = () => {
             <CardContent className="p-8">
               <div className="space-y-6">
                 <div>
+                  <label className="text-lg font-semibold mb-4 block">
+                    Что создать?
+                  </label>
+                  <Tabs value={mediaType} onValueChange={(v) => setMediaType(v as 'video' | 'image')} className="w-full">
+                    <TabsList className="grid w-full grid-cols-2 h-14">
+                      <TabsTrigger value="image" className="text-base gap-2">
+                        <Icon name="Image" size={20} />
+                        Фото
+                      </TabsTrigger>
+                      <TabsTrigger value="video" className="text-base gap-2">
+                        <Icon name="Video" size={20} />
+                        Видео
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+
+                <div>
                   <label className="text-lg font-semibold mb-3 block flex items-center gap-2">
                     <Icon name="Wand2" size={20} className="text-primary" />
-                    Опишите ваше видео
+                    Опишите вашу идею
                   </label>
                   <Textarea
                     value={prompt}
@@ -100,12 +148,12 @@ const Index = () => {
                   {isGenerating ? (
                     <>
                       <Icon name="Loader2" className="mr-2 animate-spin" size={24} />
-                      Генерация видео...
+                      Создаю {mediaType === 'image' ? 'фото' : 'видео'}...
                     </>
                   ) : (
                     <>
-                      <Icon name="Play" className="mr-2" size={24} />
-                      Создать видео
+                      <Icon name="Sparkles" className="mr-2" size={24} />
+                      Создать {mediaType === 'image' ? 'фото' : 'видео'}
                     </>
                   )}
                 </Button>
@@ -117,61 +165,75 @@ const Index = () => {
         <section>
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-3xl font-bold flex items-center gap-3">
-              <Icon name="Film" size={32} className="text-primary" />
-              Галерея видео
+              <Icon name="Sparkles" size={32} className="text-primary" />
+              Галерея
             </h2>
             <Badge variant="secondary" className="text-lg px-4 py-2">
-              {videos.length} видео
+              {items.length} {items.length === 1 ? 'элемент' : 'элементов'}
             </Badge>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {videos.map((video, index) => (
+            {items.map((item, index) => (
               <Card 
-                key={video.id} 
+                key={item.id} 
                 className="group overflow-hidden hover:shadow-2xl transition-all duration-300 border-2 hover:border-primary/50 animate-fade-in"
                 style={{ animationDelay: `${index * 100}ms` }}
               >
                 <CardContent className="p-0">
                   <div className="relative aspect-video bg-gradient-to-br from-primary/20 to-secondary/20 overflow-hidden">
-                    <img 
-                      src={video.thumbnail} 
-                      alt={video.prompt}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    />
-                    {video.status === 'generating' && (
-                      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center">
+                    {item.status === 'completed' && item.url && (
+                      <img 
+                        src={item.url} 
+                        alt={item.prompt}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      />
+                    )}
+                    
+                    {item.status === 'generating' && (
+                      <div className="absolute inset-0 bg-gradient-to-br from-primary/40 to-secondary/40 backdrop-blur-sm flex items-center justify-center">
                         <div className="text-center space-y-3">
                           <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto" />
-                          <p className="text-white font-semibold">Генерация...</p>
+                          <p className="text-white font-semibold">Создаю {item.type === 'image' ? 'фото' : 'видео'}...</p>
                         </div>
                       </div>
                     )}
-                    {video.status === 'completed' && (
+                    
+                    {item.status === 'completed' && (
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <Button size="lg" className="bg-white text-primary hover:bg-white/90 shadow-xl">
-                          <Icon name="Play" className="mr-2" size={20} />
-                          Смотреть
+                          <Icon name={item.type === 'image' ? 'Eye' : 'Play'} className="mr-2" size={20} />
+                          {item.type === 'image' ? 'Открыть' : 'Смотреть'}
                         </Button>
                       </div>
                     )}
+                    
+                    <Badge 
+                      className={`absolute top-3 left-3 ${
+                        item.type === 'image' ? 'bg-blue-500' : 'bg-purple-500'
+                      }`}
+                    >
+                      <Icon name={item.type === 'image' ? 'Image' : 'Video'} size={14} className="mr-1" />
+                      {item.type === 'image' ? 'Фото' : 'Видео'}
+                    </Badge>
+                    
                     <Badge 
                       className={`absolute top-3 right-3 ${
-                        video.status === 'generating' 
+                        item.status === 'generating' 
                           ? 'bg-yellow-500 animate-pulse-glow' 
                           : 'bg-green-500'
                       }`}
                     >
-                      {video.status === 'generating' ? 'В процессе' : 'Готово'}
+                      {item.status === 'generating' ? 'Создаю' : 'Готово'}
                     </Badge>
                   </div>
                   <div className="p-4 space-y-2">
                     <p className="font-medium text-sm line-clamp-2 text-foreground">
-                      {video.prompt}
+                      {item.prompt}
                     </p>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Icon name="Clock" size={14} />
-                      {video.timestamp.toLocaleString('ru-RU', { 
+                      {item.timestamp.toLocaleString('ru-RU', { 
                         day: 'numeric',
                         month: 'short',
                         hour: '2-digit',
@@ -184,14 +246,14 @@ const Index = () => {
             ))}
           </div>
 
-          {videos.length === 0 && (
+          {items.length === 0 && (
             <div className="text-center py-16 animate-fade-in">
               <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-                <Icon name="VideoOff" size={48} className="text-muted-foreground" />
+                <Icon name="Sparkles" size={48} className="text-muted-foreground" />
               </div>
-              <h3 className="text-xl font-semibold mb-2">Пока нет видео</h3>
+              <h3 className="text-xl font-semibold mb-2">Пока пусто</h3>
               <p className="text-muted-foreground">
-                Создайте своё первое AI видео прямо сейчас!
+                Создайте своё первое AI фото или видео прямо сейчас!
               </p>
             </div>
           )}

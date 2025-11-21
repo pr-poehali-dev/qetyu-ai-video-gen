@@ -1,0 +1,30 @@
+{
+  "tests": [
+    {
+      "name": "Generate image with valid prompt",
+      "method": "POST",
+      "body": {
+        "prompt": "Beautiful sunset over mountains"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "url": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Reject request without prompt",
+      "method": "POST",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "Prompt is required"
+      }
+    },
+    {
+      "name": "Handle OPTIONS for CORS",
+      "method": "OPTIONS",
+      "expectedStatus": 200
+    }
+  ]
+}
